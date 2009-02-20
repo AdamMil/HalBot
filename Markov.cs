@@ -547,7 +547,7 @@ public class Brain
     float probability;
     ArrayList list = GetResponse(bnode, fnode, out probability);
 
-    return new Response(keyword, WordsToString(list)+" [keyword="+keyword+"]", probability/list.Count);
+    return new Response(keyword, WordsToString(list), probability/list.Count);
   }
 
   ArrayList GetResponse(Node bnode, Node fnode, out float probability)
