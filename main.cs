@@ -16,7 +16,7 @@ sealed class App
       Console.WriteLine("Brain initialized.");
     }
     else Console.WriteLine("WARNING: no brain");
-    bot.Connect("irc.esper.net", 6667);
+    bot.Connect("efnet.xs4all.nl", 6667);
     bot.LogFile = "irc.log";
     bot.Nick = "limpu";
 
