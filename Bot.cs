@@ -230,7 +230,7 @@ public class IrcBot
 
     if(char.IsDigit(command[0]))
       switch(int.Parse(command))
-      { case 433: Nick=GetRandomNick(); break;
+      { case 433: Nick=nick=GetRandomNick(); break;
       }
     else switch(command.ToUpper())
     { case "KICK":
@@ -422,7 +422,7 @@ public class IrcBot
   }
 
   static Regex parsere = new Regex(@"
-    ^(?::(?<prefix>[\w!@\-\[\]\.'`^{}]+)\x20+)?
+    ^(?::(?<prefix>\S+)\x20+)?
      (?<command>\d\d\d|[a-zA-Z]+)
      (?:\x20+(?<params>.*?))?\s*$",
      RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnorePatternWhitespace);
