@@ -102,7 +102,8 @@ public class Brain
     
     #region normalization
     string[] normals = new string[]
-    { "arent",         "aren't",
+    { 
+      "arent",         "aren't",
       "cant",          "can't",
       "couldnt",       "couldn't",
       "couldve",       "could've",

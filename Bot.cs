@@ -9,6 +9,7 @@ using System.Threading;
 namespace HalBot
 {
 
+// TODO: limpu: preserve but collapse whitespace (?)
 public class IrcBot
 { public bool Connected { get { return sock!=null && sock.Connected; } }
 
@@ -421,18 +422,18 @@ public class IrcBot
     return text;
   }
 
-  static Regex parsere = new Regex(@"
+  static readonly Regex parsere = new Regex(@"
     ^(?::(?<prefix>\S+)\x20+)?
      (?<command>\d\d\d|[a-zA-Z]+)
      (?:\x20+(?<params>.*?))?\s*$",
      RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnorePatternWhitespace);
-  static Regex parmsre = new Regex(@":.*|[^\x20\x00\r\n]+", RegexOptions.Compiled|RegexOptions.Singleline);
-  static Regex nickre  = new Regex(@"^(?<nick>[\w\-\[\]'`^{}]+)(?:!(?<user>\S+))?(?:@(?<host>[\w\.]+))?", 
+  static readonly Regex parmsre = new Regex(@":.*|[^\x20\x00\r\n]+", RegexOptions.Compiled|RegexOptions.Singleline);
+  static readonly Regex nickre  = new Regex(@"^(?<nick>[\w\-\[\]'`^{}]+)(?:!(?<user>\S+))?(?:@(?<host>[\w\.]+))?", 
                                    RegexOptions.Compiled|RegexOptions.Singleline);
-  static Regex badinput = new Regex(@"[a-zA-Z]+://", RegexOptions.Compiled|RegexOptions.Singleline);
-  static Regex inputstrip = new Regex(@"^[\w\-]+:\s*", RegexOptions.Compiled|RegexOptions.Singleline);
-  static Random rand = new Random();
-  static byte[] crlf = { 13, 10 };
+  static readonly Regex badinput = new Regex(@"[a-zA-Z]+://", RegexOptions.Compiled|RegexOptions.Singleline);
+  static readonly Regex inputstrip = new Regex(@"^[\w\-]+:\s*", RegexOptions.Compiled|RegexOptions.Singleline);
+  static readonly Random rand = new Random();
+  static readonly byte[] crlf = { 13, 10 };
 }
 
 } // namespace HalBot
