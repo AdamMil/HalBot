@@ -1,0 +1,16 @@
+﻿# each line contains a keyword followed by the keyword to replace it with. by default the entries are bidirectional,
+# such that a line containing "A B" will result "A" being replace by "B" and "B" being replaced by "A". lines prefixed
+# with an asterisk are not bidirectional
+dislike   like
+hate      love
+i         you
+i'd       you'd
+i'll      you'll
+i'm       you're
+i've      you've
+me        you
+mine      yours
+my        your
+myself    yourself
+no        yes
+why       because

@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema targetNamespace="http://adammil.net/HalBot/feeds.xsd" elementFormDefault="qualified"
+           xmlns="http://adammil.net/HalBot/feeds.xsd" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:simpleType name="probability">
+    <xs:restriction base="xs:float">
+      <xs:minInclusive value="0" />
+      <xs:maxInclusive value="1" />
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="processor">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="dequote" />
+      <xs:enumeration value="passthrough" />
+      <xs:enumeration value="splitOnLF" />
+      <xs:enumeration value="splitOnPunctuation" />
+      <xs:enumeration value="splitOnPunctuationOrLF" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="nonEmptyString">
+    <xs:restriction base="xs:string">
+      <xs:pattern value=".*\S+.*" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="timespan">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d\d?:\d\d?(:\d\d?)?" />
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="feed">
+    <xs:attribute name="blendChance" type="probability" />
+                  
+    <xs:attribute name="downloadItems" type="xs:boolean" />
+    <xs:attribute name="isHtml" type="xs:boolean" />
+    <xs:attribute name="itemsToRemember" type="xs:nonNegativeInteger" />
+    <xs:attribute name="logName" type="nonEmptyString" />
+    <xs:attribute name="processor" type="processor" />
+    <xs:attribute name="ttl" type="timespan" />
+    <xs:attribute name="url" type="xs:anyURI" use="required" />
+  </xs:complexType>
+
+  <xs:element name="feeds">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="feed" type="feed" minOccurs="0" maxOccurs="unbounded" />
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

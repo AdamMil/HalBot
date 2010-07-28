@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<feeds xmlns="http://adammil.net/HalBot/feeds.xsd">
+  <feed logName="rssQuotes" blendChance="0.5" isHtml="false" processor="dequote" ttl="24:00"
+        url="http://feeds2.feedburner.com/brainyquote/QUOTEBR" />
+
+  <feed logName="rssWEIT" url="http://whyevolutionistrue.wordpress.com/feed/" ttl="4:00" />
+
+  <feed logName="rssMonbiot" url="http://www.guardian.co.uk/environment/georgemonbiot/rss" ttl="16:00" />
+</feeds>
