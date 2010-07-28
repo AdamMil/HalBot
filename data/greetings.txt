@@ -1,0 +1,7 @@
+﻿# this file contains keywords that are considered to be greetings
+g'day
+greetings
+hello
+hi
+howdy
+welcome
