@@ -11,11 +11,11 @@
   
   <xs:simpleType name="processor">
     <xs:restriction base="xs:string">
-      <xs:enumeration value="dequote" />
       <xs:enumeration value="passthrough" />
       <xs:enumeration value="splitOnLF" />
       <xs:enumeration value="splitOnPunctuation" />
       <xs:enumeration value="splitOnPunctuationOrLF" />
+      <xs:enumeration value="unquote" />
     </xs:restriction>
   </xs:simpleType>
 

@@ -19,173 +19,63 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 using System;
-using System.Collections.Generic;
-using System.Globalization;
+using System.Configuration;
 using System.IO;
-using System.Net;
-using System.Text;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Xml;
-using AdamMil.Collections;
 using AdamMil.IO;
+using AdamMil.Utilities;
 using IrcLib;
-
-/*
- X Add recent news via RSS feeds
- X  Say something about new stories?
- X Respond to messages
- *  Either choose a response based on the quality of the response
- *    Use multiple methods of evaluation?
- *      Least likely (most surprising)
- *      Includes more keywords
- *      Includes better keywords (eg, less likely ones, and/or ones found in recent conversations)
- *  Or choose a response based on a fixed keyword
- *    Use multiple methods of choosing the keyword
- *      Least likely, found in recent conversation, etc.
- X Make random statements while the room is active but the bot is not in conversation already
- X  Comment on recent news
- *  Analyze conversation being had
- X Reconnect after disconnect
- X Rejoin after kicked
- X Keep a desired nickname
- X don't learn from or reply to other bots
- * Taunt kickers?
- */
 
 namespace HalBot
 {
   class Program
   {
-    static HalBot irc = new HalBot();
-    static IdentServer ident = new IdentServer();
-    static Thread ircThread = new Thread(ThreadFunc);
-    static Thread identThread = new Thread(IdentFunc);
-    static bool quitting;
-
-    static string[] GetMatches(MatchCollection mc)
-    {
-      string[] values = new string[mc.Count];
-      for(int i=0; i<values.Length; i++) values[i] = mc[i].Value;
-      return values;
-    }
-
-    static string Arg(string[] args, int i)
-    {
-      return i < args.Length ? args[i] : null;
-    }
-
-    static string Rest(string[] args, int i)
-    {
-      if(i < args.Length)
-      {
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-        for(; i < args.Length; i++)
-        {
-          if(sb.Length != 0) sb.Append(' ');
-          sb.Append(args[i]);
-        }
-        return sb.ToString();
-      }
-      else return null;
-    }
-
     static void Main()
     {
-      //ident.Listen();
-      //identThread.Start();
-
-      ircThread.Start();
-      irc.BabbleTime = 2;
-      irc.DesiredNickname = "MuBot";
-      irc.Verbose = true;
-      irc.Brain.LearnLines(File.OpenText("d:/adammil/code/halbot/foo.trn"), true);
-      irc.LoadFeeds(Path.Combine(HalBot.DataDirectory, "feeds.xml"));
-      irc.Connect("efnet.xs4all.nl");
-      irc.UsersToIgnore.Add("AdamMil");
+      Initialize();
 
       while(true)
       {
         while(!Console.KeyAvailable) Thread.Sleep(50);
         Console.Write("> ");
         string line = Console.ReadLine();
-
-        if(line == null)
-        {
-          lock(irc) irc.Disconnect();
-          break;
-        }
-        else
-        {
-          Match m = cmdRe.Match(line);
-          if(!m.Success) continue;
-
-          string command = m.Groups["cmd"].Value;
-          string[] args = GetMatches(paramRe.Matches(m.Groups["args"].Value));
-
-          if(command == "join")
-          {
-            if(args.Length != 0)
-            {
-              lock(irc)
-              {
-                irc.Join(args[0].Split(','), Arg(args, 1), delegate(JoinReply r)
-                {
-                  Console.WriteLine(r.Error == IrcResponseCodes.None ? "Joined " + r.Channel.Name :
-                                                                       "Can't join " + r.Channel.Name + ": " + r.Error);
-                });
-              }
-            }
-          }
-          else if(command == "part")
-          {
-            if(args.Length != 0)
-            {
-              lock(irc) irc.Part(args[0].Split(','));
-            }
-          }
-          else if(command == "quote")
-          {
-            lock(irc) irc.SendRawCommand(Rest(args, 0));
-          }
-          else if(command == "reply")
-          {
-            lock(irc)
-            {
-              string response = irc.Brain.GetResponse(Rest(args, 0), true, false);
-              Console.WriteLine(response ?? "I have nothing to say to that.");
-            }
-          }
-          else if(command == "quit" || command == "exit")
-          {
-            lock(irc) irc.Disconnect(Rest(args, 0));
-            break;
-          }
-          else
-          {
-            Console.WriteLine("Unknown command: " + command);
-          }
-        }
+        if(line == null || !ProcessCommand(line)) break;
       }
 
-      quitting = true;
-      ircThread.Join();
-      //identThread.Join();
+      lock(bot) bot.Disconnect();
 
-      irc.Dispose();
+      quitting = true;
+      if(botThread != null) botThread.Join();
+      if(ident != null) ident.Shutdown();
+      if(identThread != null) identThread.Join();
+      bot.Dispose();
     }
 
-    static void ThreadFunc()
+    const string PropertyError = "ERROR: Unable to initialize property {0} with value \"{1}\". {2}";
+
+    static string Arg(string[] args, int i)
+    {
+      return Arg(args, i, null);
+    }
+
+    static string Arg(string[] args, int i, string defaultValue)
+    {
+      return i < args.Length ? args[i] : defaultValue;
+    }
+
+    static void BotFunc()
     {
       while(!quitting)
       {
-        if(irc.CanProcessData)
+        if(bot.CanProcessData)
         {
           while(true)
           {
-            lock(irc)
+            lock(bot)
             {
-              if(!irc.ProcessData(100)) break;
+              if(!bot.ProcessData(100)) break;
             }
           }
         }
@@ -196,6 +86,24 @@ namespace HalBot
       }
     }
 
+    static bool GetBoolSetting(string propertyName, bool defaultValue)
+    {
+      string setting = ConfigurationManager.AppSettings[propertyName];
+      if(!string.IsNullOrEmpty(setting))
+      {
+        try { return ParseBool(setting); }
+        catch(Exception ex) { Console.WriteLine(PropertyError, propertyName, setting, ex.Message); }
+      }
+      return defaultValue;
+    }
+
+    static string[] GetMatches(MatchCollection mc)
+    {
+      string[] values = new string[mc.Count];
+      for(int i=0; i<values.Length; i++) values[i] = mc[i].Value;
+      return values;
+    }
+
     static void IdentFunc()
     {
       while(!quitting)
@@ -203,6 +111,373 @@ namespace HalBot
         ident.ProcessRequests(100);
       }
     }
+
+    static void Initialize()
+    {
+      Console.WriteLine("Initializing...");
+      foreach(PropertyInfo property in bot.GetType().GetProperties())
+      {
+        if(property.CanWrite && property.GetSetMethod() != null)
+        {
+          object value = ConfigurationManager.AppSettings[property.Name];
+          if(value != null)
+          {
+            try
+            {
+              property.GetSetMethod().Invoke(bot, new object[] { TypeUtility.ChangeType(property.PropertyType, value) });
+            }
+            catch(Exception ex)
+            {
+              Console.WriteLine(PropertyError, property.Name, value, ex.Message);
+            }
+          }
+        }
+      }
+
+      correctSpelling = GetBoolSetting("CorrectSpelling", correctSpelling);
+      enableIdent     = GetBoolSetting("EnableIdent", enableIdent);
+
+      string learnFile = ConfigurationManager.AppSettings["LearnFile"];
+      if(!string.IsNullOrEmpty(learnFile))
+      {
+        if(!Path.IsPathRooted(learnFile)) learnFile = Path.Combine(HalBot.DataDirectory, learnFile);
+        if(File.Exists(learnFile))
+        {
+          try
+          {
+            using(StreamReader reader = new StreamReader(learnFile)) LearnFile(reader);
+          }
+          catch(Exception ex)
+          {
+            Console.WriteLine("ERROR: Unable to read file {0}. {1}", learnFile, ex.Message);
+          }
+        }
+        else
+        {
+          Console.WriteLine("WARNING: File {0} doesn't exist.", learnFile);
+        }
+      }
+
+      string rssFeeds = ConfigurationManager.AppSettings["RssFeeds"];
+      if(!string.IsNullOrEmpty(rssFeeds))
+      {
+        if(!Path.IsPathRooted(rssFeeds)) rssFeeds = Path.Combine(HalBot.DataDirectory, rssFeeds);
+        if(File.Exists(rssFeeds))
+        {
+          try { bot.LoadRssFeeds(rssFeeds); }
+          catch(Exception ex) { Console.WriteLine("ERROR: Unable to read file {0}. {1}", rssFeeds, ex.Message); }
+        }
+        else
+        {
+          Console.WriteLine("WARNING: File {0} doesn't exist.", rssFeeds);
+        }
+      }
+
+      
+      if(enableIdent)
+      {
+        try
+        {
+          Console.WriteLine("Starting ident service...");
+          ident = new IdentServer();
+          ident.Listen();
+          identThread = new Thread(IdentFunc);
+          identThread.Start();
+        }
+        catch(Exception ex)
+        {
+          Console.Write("WARNING: Unable to start ident service. " + ex.Message);
+        }
+      }
+
+      botThread = new Thread(BotFunc);
+      botThread.Start();
+
+      string server = ConfigurationManager.AppSettings["Server"], port = ConfigurationManager.AppSettings["Port"];
+      if(!string.IsNullOrEmpty(server))
+      {
+        int portNumber;
+        try
+        {
+          portNumber = string.IsNullOrEmpty(port) ? 6667 : int.Parse(port);
+
+          try
+          {
+            Console.WriteLine("Connecting...");
+            bot.Connect(server, portNumber);
+          }
+          catch(Exception ex)
+          {
+            Console.WriteLine("ERROR: Unable to connect to server {0}:{1}. {2}", server, portNumber, ex.Message);
+          }
+        }
+        catch(Exception ex)
+        {
+          Console.WriteLine(PropertyError, "Port", port, ex.Message);
+        }
+      }
+
+      if(bot.IsConnected)
+      {
+        string channels = ConfigurationManager.AppSettings["InitialChannels"];
+        if(!string.IsNullOrEmpty(channels)) bot.Join(Split(channels), null, null);
+      }
+    }
+
+    static string Join(string[] args)
+    {
+      return Join(args, 0);
+    }
+
+    static string Join(string[] args, int start)
+    {
+      if(start < args.Length)
+      {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        for(; start<args.Length; start++)
+        {
+          if(sb.Length != 0) sb.Append(' ');
+          sb.Append(args[start]);
+        }
+        return sb.ToString();
+      }
+      else
+      {
+        return null;
+      }
+    }
+
+    static void LearnFile(StreamReader reader)
+    {
+      reader.ProcessNonEmptyLines(line =>
+      {
+        if(line[0] != '#') bot.Brain.LearnLine(line, correctSpelling);
+      });
+    }
+
+    static bool ParseBool(string str)
+    {
+      int intValue;
+
+      str = str.ToLowerInvariant();
+      if(string.Equals(str, "true", StringComparison.Ordinal)) return true;
+      else if(string.Equals(str, "false", StringComparison.Ordinal)) return false;
+      else if(int.TryParse(str, out intValue)) return intValue != 0;
+      else return bool.Parse(str);
+    }
+
+    static bool ProcessCommand(string line)
+    {
+      Match m = cmdRe.Match(line);
+      if(!m.Success) return true;
+
+      string command = m.Groups["cmd"].Value.ToLowerInvariant(), argText = m.Groups["args"].Value;
+      string[] args = GetMatches(paramRe.Matches(argText));
+
+      try
+      {
+        // handle commands that require user input outside of a lock
+        if(command == "learn")
+        {
+          string text;
+          if(args.Length != 0)
+          {
+            text = argText;
+          }
+          else
+          {
+            Console.Write("Enter text to learn: ");
+            text = Console.ReadLine();
+          }
+
+          if(!string.IsNullOrEmpty(text))
+          {
+            lock(bot) bot.Brain.LearnLine(text, false);
+            Console.WriteLine("Learned.");
+          }
+        }
+        else if(command == "learnfile")
+        {
+          string filename;
+          if(args.Length != 0)
+          {
+            filename = argText;
+          }
+          else
+          {
+            Console.Write("Enter filename: ");
+            filename = Console.ReadLine();
+          }
+
+          if(!string.IsNullOrEmpty(filename))
+          {
+            using(StreamReader reader = new StreamReader(filename))
+            {
+              Console.WriteLine("Learning...");
+              lock(bot) LearnFile(reader);
+              Console.WriteLine("Learned.");
+            }
+          }
+        }
+        else // then handle quick commands inside of a lock so we don't have to lock during every command
+        {
+          lock(bot)
+          {
+            switch(command.ToLowerInvariant())
+            {
+              case "autolearn":
+                if(args.Length != 0) bot.AutoLearn = ParseBool(args[0]);
+                WriteBoolOption("Autolearn", bot.AutoLearn);
+                break;
+              case "babble":
+                bot.Babble(Arg(args, 0), true);
+                break;
+              case "correctspelling":
+                if(args.Length != 0) correctSpelling = ParseBool(args[0]);
+                WriteBoolOption("Spellcheck", correctSpelling);
+                break;
+              case "delay":
+                if(args.Length != 0) bot.TypingDelay = int.Parse(args[0]);
+                Console.WriteLine("Typing delay is {0} ms/character.", bot.TypingDelay);
+                break;
+              case "exit": case "quit":
+                bot.Disconnect(Join(args));
+                return false;
+              case "forget":
+                bot.Brain.Clear();
+                Console.WriteLine("Brain wiped.");
+                break;
+              case "ignore":
+                if(args.Length != 0)
+                {
+                  foreach(string user in Split(args[0])) bot.UsersToIgnore.Add(user);
+                }
+                if(bot.UsersToIgnore.Count == 0) Console.WriteLine("Not ignoring anybody.");
+                else Console.WriteLine("Ignoring {0}.", StringUtility.Join(", ", bot.UsersToIgnore));
+                break;
+              case "interject":
+                if(args.Length != 0) bot.Interject = ParseBool(args[0]);
+                WriteBoolOption("Interject", bot.Interject);
+                break;
+              case "interjectchance":
+                if(args.Length != 0) bot.InterjectChance = int.Parse(args[0]);
+                Console.WriteLine("Interject chance is {0}%.", bot.InterjectChance);
+                break;
+              case "join":
+                if(args.Length != 0)
+                {
+                  bot.Join(Split(args[0]), Arg(args, 1), delegate(JoinReply r)
+                  {
+                    if(r.Error != IrcResponseCodes.None)
+                    {
+                      Console.WriteLine("Can't join {0}: {1}", r.Channel.Name, r.Error.ToString());
+                    }
+                  });
+                }
+                else
+                {
+                  Console.WriteLine("ERROR: Format is 'join <channel>[,<channel>,...] [<password>].");
+                }
+                break;
+              case "logfile":
+                if(args.Length != 0) bot.LogFile = argText;
+                if(string.IsNullOrEmpty(bot.LogFile)) Console.WriteLine("Logging disabled.");
+                else Console.WriteLine("Logging to {0}.", bot.LogFile);
+                break;
+              case "lograw":
+                if(args.Length != 0) bot.LogRawTraffic = ParseBool(args[0]);
+                WriteBoolOption("LogRawTraffic", bot.LogRawTraffic);
+                break;
+              case "nick":
+                if(args.Length != 0)
+                {
+                  bot.SetNickname(args[0]);
+                  bot.DesiredNickname = args[0];
+                }
+                Console.WriteLine("Desired nick is {0}.", bot.DesiredNickname);
+                break;
+              case "order":
+                if(args.Length != 0) bot.Brain.MarkovOrder = int.Parse(args[0]);
+                Console.WriteLine("Markov order is {0}.", bot.Brain.MarkovOrder);
+                break;
+              case "part":
+                if(args.Length != 0) bot.Part(Split(args[0]));
+                else Console.WriteLine("ERROR: Format is 'part [<channel>,<channel>,...]'.");
+                break;
+              case "quote":
+                if(args.Length != 0) bot.SendRawCommand(Join(args));
+                break;
+              case "reply":
+                Console.WriteLine(bot.Brain.GetResponse(Join(args), true, false) ?? "I have nothing to say to that.");
+                break;
+              case "say":
+                if(args.Length >= 2) bot.SendDelayedMessage(args[0], Join(args, 1));
+                else Console.WriteLine("ERROR: Format is 'say <destination> <message>'.");
+                break;
+              case "saynow":
+                if(args.Length >= 2) bot.SendMessage(args[0], Join(args, 1));
+                else Console.WriteLine("ERROR: Format is 'saynow <destination> <message>'.");
+                break;
+              case "server":
+                if(args.Length != 0)
+                {
+                  Console.WriteLine("Connecting...");
+                  bot.Connect(args[0], int.Parse(Arg(args, 1, "6667")));
+                  Thread.Sleep(1000); // wait for the MOTD to scroll by
+                }
+                if(bot.RemoteEndPoint == null || !bot.IsConnected) Console.WriteLine("Not connected.");
+                else Console.WriteLine("Connected to {0}.", bot.RemoteEndPoint);
+                break;
+              case "stopignoring":
+                if(args.Length != 0)
+                {
+                  foreach(string user in Split(args[0])) bot.UsersToIgnore.Remove(user);
+                }
+                else
+                {
+                  bot.UsersToIgnore.Clear();
+                }
+                if(bot.UsersToIgnore.Count == 0) Console.WriteLine("Not ignoring anybody.");
+                else Console.WriteLine("Ignoring {0}.", StringUtility.Join(", ", bot.UsersToIgnore));
+                break;
+              case "updaterss":
+                Console.WriteLine("Updating RSS feeds...");
+                bot.UpdateRssFeeds();
+                Console.WriteLine("RSS feeds updated.");
+                break;
+              case "verbose":
+                if(args.Length != 0) bot.Verbose = ParseBool(args[0]);
+                WriteBoolOption("Verbose mode", bot.Verbose);
+                break;
+              default:
+                Console.WriteLine("ERROR: Unknown command \"{0}\".", command);
+                break;
+            }
+          }
+        }
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("ERROR: {0}: {1}", ex.GetType().Name, ex.Message);
+      }
+
+      return true;
+    }
+
+    static string[] Split(string str)
+    {
+      return str.Split(',', s => s.Trim(), StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    static void WriteBoolOption(string name, bool value)
+    {
+      Console.WriteLine("{0} is {1}.", name, value ? "enabled" : "disabled");
+    }
+
+    static readonly HalBot bot = new HalBot();
+    static IdentServer ident;
+    static Thread botThread, identThread;
+    static bool correctSpelling=true, enableIdent=true, quitting;
 
     static readonly Regex cmdRe = new Regex(@"^\s*(?<cmd>\w+)(?:\s+(?<args>.*?))?\s*$", RegexOptions.Singleline);
     static readonly Regex paramRe = new Regex(@"\S+", RegexOptions.Singleline);

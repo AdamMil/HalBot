@@ -35,16 +35,13 @@ namespace HalBot
 
 sealed class Brain
 {
-  public Brain() : this(null, 3) { }
+  public Brain() : this(null) { }
 
-  public Brain(Brain parentBrain) : this(parentBrain, 3) { }
-
-  public Brain(Brain parentBrain, int markovOrder)
+  public Brain(Brain parentBrain)
   {
-    if(markovOrder < 1) throw new ArgumentOutOfRangeException();
     this.parentBrain    = parentBrain;
-    this.MarkovOrder    = markovOrder;
-    this.MaxBlendChance = 0.75f;
+    this.MarkovOrder    = 3;
+    this.MaxBlendChance = 0.75f; // TODO: tune this
   }
 
   static Brain()
@@ -102,9 +99,22 @@ sealed class Brain
     }
   }
 
+  // TODO: make sure changing this after stuff has been learned doesn't cause crashes or incorrect behavior
   public int MarkovOrder
   {
-    get; private set;
+    get { return _markovOrder; }
+    set
+    {
+      if(value < 1) throw new ArgumentOutOfRangeException();
+      _markovOrder = value;
+    }
+  }
+
+  public void Clear()
+  {
+    forwardModel.Clear();
+    backwardModel.Clear();
+    totalRootCount = 0;
   }
 
   public string GetRandomUtterance()
@@ -644,7 +654,7 @@ sealed class Brain
   readonly Random rand = new Random();
   readonly Brain parentBrain;
   float _blendFactor;
-  int totalRootCount;
+  int totalRootCount, _markovOrder;
 
   static void CorrectSpelling(string[] words)
   {

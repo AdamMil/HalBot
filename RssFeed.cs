@@ -26,6 +26,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using AdamMil.IO;
+using AdamMil.Utilities;
 
 namespace HalBot
 {
@@ -145,8 +146,8 @@ abstract class RssFeed : IDisposable
       XmlNamespaceManager ns = new XmlNamespaceManager(doc.NameTable);
       ns.AddNamespace("content", "http://purl.org/rss/1.0/modules/content/");
 
-      doc.LoadXml(Download(Url));
       LastUpdate = DateTime.Now;
+      doc.LoadXml(Download(Url));
 
       foreach(XmlElement itemElement in doc.DocumentElement.SelectNodes("//item"))
       {
@@ -259,15 +260,18 @@ abstract class HalBotRssFeed : RssFeed
     {
       if(!string.Equals(value, LogName, StringComparison.Ordinal))
       {
-        if(log != null) log.Close();
-        if(idLog != null) idLog.Close();
-        log = idLog = null;
+        Utility.Dispose(ref log);
+        Utility.Dispose(ref idLog);
+        _logName = null;
 
-        string logFile = Path.Combine(HalBot.LogDirectory, value + ".log");
-        string idFile  = Path.Combine(HalBot.LogDirectory, value + ".ids");
-        log      = new StreamWriter(logFile, true);
-        idLog    = new StreamWriter(idFile, true);
-        _logName = value;
+        if(!string.IsNullOrEmpty(value))
+        {
+          string logFile = Path.Combine(HalBot.LogDirectory, value + ".log");
+          string idFile  = Path.Combine(HalBot.LogDirectory, value + ".ids");
+          log      = new StreamWriter(logFile, true);
+          idLog    = new StreamWriter(idFile, true);
+          _logName = value;
+        }
       }
     }
   }
@@ -299,11 +303,6 @@ abstract class HalBotRssFeed : RssFeed
     }
 
     if(idLog != null) idLog.WriteLine(item.Id);
-  }
-
-  protected static IEnumerable<string> Dequote(string body)
-  {
-    return new string[] { body.Trim().Trim(new char[] { '"', '“', '”' }) };
   }
 
   protected static IEnumerable<string> SplitOnLF(string body)
@@ -427,7 +426,12 @@ abstract class HalBotRssFeed : RssFeed
     }
   }
 
-  TextWriter log, idLog;
+  protected static IEnumerable<string> Unquote(string body)
+  {
+    return new string[] { body.Trim().Trim(new char[] { '"', '“', '”' }).Trim() };
+  }
+
+  StreamWriter log, idLog;
   string _logName;
 
   static bool AllCapitals(string word)
@@ -468,7 +472,7 @@ abstract class HalBotRssFeed : RssFeed
     string file = Path.Combine(HalBot.DataDirectory, "abbreviations.txt");
     if(File.Exists(file))
     {
-      using(StringReader sr = new StringReader(file))
+      using(StreamReader sr = new StreamReader(file))
       {
         sr.ProcessNonEmptyLines(word =>
         {
@@ -531,7 +535,7 @@ sealed class HalBotXmlRssFeed : HalBotRssFeed
 
   enum ProcessorType
   {
-    Dequote, Passthrough, SplitOnLF, SplitOnPunctuation, SplitOnPunctuationOrLF
+    Passthrough, SplitOnLF, SplitOnPunctuation, SplitOnPunctuationOrLF, Unquote
   }
 
   ProcessorType Processor
@@ -545,10 +549,10 @@ sealed class HalBotXmlRssFeed : HalBotRssFeed
 
     switch(Processor)
     {
-      case ProcessorType.Dequote: return Dequote(body);
       case ProcessorType.SplitOnLF: return SplitOnLF(body);
       case ProcessorType.SplitOnPunctuation: return SplitOnPunctuation(body, true);
       case ProcessorType.SplitOnPunctuationOrLF: return SplitOnPunctuationOrLF(body, true);
+      case ProcessorType.Unquote: return Unquote(body);
       default: return new string[] { body };
     }
   }
