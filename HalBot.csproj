@@ -8,7 +8,7 @@
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>HalBot</RootNamespace>
-    <AssemblyName>Test</AssemblyName>
+    <AssemblyName>HalBot</AssemblyName>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>2.0</OldToolsVersion>
@@ -50,6 +50,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.configuration" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
@@ -129,10 +130,20 @@
       <Project>{BC146E65-29FA-4D05-89E2-CF485EBC86B8}</Project>
       <Name>AdamMil.Mathematics</Name>
     </ProjectReference>
+    <ProjectReference Include="..\AdamMil.net\Utilities\AdamMil.Utilities.csproj">
+      <Project>{29134637-6D08-432C-8161-9DEEE13C955D}</Project>
+      <Name>AdamMil.Utilities</Name>
+    </ProjectReference>
     <ProjectReference Include="..\IrcLib\IrcLib.csproj">
       <Project>{0DECBC75-443D-4AFE-BD85-FFB7CE52AB1B}</Project>
       <Name>IrcLib</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+    <Content Include="data\training.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
