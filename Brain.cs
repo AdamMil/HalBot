@@ -49,7 +49,7 @@ sealed class Brain
     swaps       = LoadDictionary("swaps.txt", true);
     spellings   = LoadDictionary("corrections.txt", false);
     badKeywords = LoadKeywordSet("badKeywords.txt");
-    greetings   = LoadKeywordSet("greetings.txt");
+    greetings   = LoadKeywordSet("greetingWords.txt");
   }
 
   public delegate float ResponseEvaluator(Utterance response);
@@ -84,6 +84,12 @@ sealed class Brain
     string text;
   }
   #endregion
+
+  /// <summary>Gets whether any information has been stored in the brain.</summary>
+  public bool IsEmpty
+  {
+    get { return totalRootCount == 0; }
+  }
 
   /// <summary>Gets the maximum probability that the parent brain will be used rather than this brain. The probability
   /// is based on the number of words in this brain compared to the number of words in the parent brain, but cannot
@@ -638,15 +644,7 @@ sealed class Brain
 
   bool ShouldLearnFrom(string[] keywords)
   {
-    if(keywords.Length <= MarkovOrder) return false; // don't learn from very short inputs
-
-    // don't learn from inputs containing URLs
-    foreach(string keyword in keywords)
-    {
-      if(keyword != null && IsUrl(keyword)) return false;
-    }
-
-    return true;
+    return keywords.Length > MarkovOrder; // don't learn from very short inputs
   }
 
   readonly Dictionary<string, MarkovNode> forwardModel = new Dictionary<string, MarkovNode>();
@@ -698,7 +696,7 @@ sealed class Brain
 
   static void ProcessLines(string file, Action<string> action)
   {
-    file = Path.Combine(HalBot.DataDirectory, file);
+    file = Path.Combine(Program.DataDirectory, file);
     if(File.Exists(file))
     {
       using(StreamReader reader = new StreamReader(file)) ProcessLines(reader, action);
@@ -727,6 +725,9 @@ sealed class Brain
     StringBuilder sb = new StringBuilder();
     bool quote = false, spaceNext = false;
     int parens = 0;
+
+    // TODO: handle smileys that mix letters and punctuation better, especially :D and :P
+    // TODO: perhaps text tokenizing and recombining should be moved out of the Brain class?
 
     foreach(string s in words)
     {
