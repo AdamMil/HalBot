@@ -27,6 +27,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using AdamMil.Collections;
+using AdamMil.IO;
 using AdamMil.Mathematics;
 using AdamMil.Utilities;
 using IrcLib;
@@ -38,18 +39,26 @@ sealed class HalBot : IrcClient, IDisposable
 {
   public HalBot()
   {
-    AutoLearn       = true;
-    AutoReconnect   = true;
-    BabbleTime      = 30;
-    Brain           = new Brain();
-    FlushLog        = true;
-    Interject       = true;
-    InterjectChance = 4;
-    LogToConsole    = true;
-    RejoinOnKick    = true;
-    RssFeeds        = new NonNullCollection<HalBotRssFeed>();
-    TypingDelay     = 70;
-    UsersToIgnore   = new HashSet<string>(NameComparer.Instance);
+    AutoLearn             = true;
+    AutoReconnect         = true;
+    BabbleTime            = 30;
+    Brain                 = new Brain();
+    FlushLog              = true;
+    GreetChance           = 5;
+    Interject             = true;
+    InterjectChance       = 4;
+    LogToConsole          = true;
+    RejoinOnKick          = true;
+    Reply                 = true;
+    RssFeeds              = new NonNullCollection<HalBotRssFeed>();
+    TypingDelay           = 70;
+    UseConversationBrains = true;
+    UsersToIgnore         = new HashSet<string>(NameComparer.Instance);
+  }
+
+  static HalBot()
+  {
+    greetingFormats = LoadLines("greetingFormats.txt");
   }
 
   /// <summary>Gets or sets whether the bot will learn from things that people say. The default is true.</summary>
@@ -97,6 +106,17 @@ sealed class HalBot : IrcClient, IDisposable
     get; set;
   }
 
+  /// <summary>Gets or sets the chance of greeting those who join to the room, as a percentage. The default is 5%.</summary>
+  public int GreetChance
+  {
+    get { return _greetChance; }
+    set
+    {
+      if(value < 0 || value > 100) throw new ArgumentOutOfRangeException();
+      _greetChance = value;
+    }
+  }
+
   /// <summary>Gets or sets whether the bot will interject into conversations (i.e. speak when not spoken to). The default is
   /// true.
   /// </summary>
@@ -132,7 +152,7 @@ sealed class HalBot : IrcClient, IDisposable
         _logFile = null;
         if(!string.IsNullOrEmpty(value))
         {
-          if(!Path.IsPathRooted(value)) value = Path.Combine(HalBot.LogDirectory, value);
+          if(!Path.IsPathRooted(value)) value = Path.Combine(Program.LogDirectory, value);
           log = new StreamWriter(value, true);
           _logFile = value;
         }
@@ -158,6 +178,12 @@ sealed class HalBot : IrcClient, IDisposable
     get; set;
   }
 
+  /// <summary>Gets or sets whether the bot will reply when somebody addresses it. The default is true.</summary>
+  public bool Reply
+  {
+    get; set;
+  }
+
   /// <summary>Gets a collection of the bot's RSS feeds.</summary>
   public NonNullCollection<HalBotRssFeed> RssFeeds
   {
@@ -173,6 +199,14 @@ sealed class HalBot : IrcClient, IDisposable
       if(value < 0) throw new ArgumentOutOfRangeException();
       _typingDelay = value;
     }
+  }
+
+  /// <summary>Gets or sets whether the bot will maintain brains per conversation to help produce more relevant replies. The
+  /// default is true.
+  /// </summary>
+  public bool UseConversationBrains
+  {
+    get; set;
   }
 
   /// <summary>Gets a set of users to ignore, by name.</summary>
@@ -378,7 +412,13 @@ sealed class HalBot : IrcClient, IDisposable
   protected override void OnJoin(string user, string channelName)
   {
     base.OnJoin(user, channelName);
-    if(Verbose || AreNamesEqual(user, Nickname)) Log("JOIN: {0} to {1}", user, channelName);
+
+    bool iJoined = AreNamesEqual(user, Nickname);
+    if(iJoined || Verbose) Log("JOIN: {0} to {1}", user, channelName);
+    if(!iJoined && !UsersToIgnore.Contains(user) && greetingFormats.Length != 0 && rand.Next(100) < GreetChance)
+    {
+      SendDelayedMessage(channelName, string.Format(greetingFormats.SelectRandom(rand), user));
+    }
   }
 
   protected override void OnKick(string kicker, string kicked, string channelName, string kickText)
@@ -405,6 +445,8 @@ sealed class HalBot : IrcClient, IDisposable
     if(Verbose || addressedToMe) Log("RECV: {0} -> {1}: {2}", from, to, text);
 
     // add the statement to the most recent conversation in this forum, or a new conversation if that one has ended
+    // TODO: we have the capability of tracking multiple conversations, and the statements in those conversations. we should
+    // try to do something with this information...
     List<Conversation> recentConversations;
     if(!forums.TryGetValue(forum, out recentConversations)) forums[forum] = recentConversations = new List<Conversation>();
 
@@ -420,15 +462,16 @@ sealed class HalBot : IrcClient, IDisposable
       if(recentConversations.Count > MaxConversationsPerForum) recentConversations.RemoveAt(0);
     }
 
-    conversation.AddStatement(fromUser, toUser, message, AutoLearn);
+    conversation.AddStatement(fromUser, toUser, message, AutoLearn && UseConversationBrains);
 
     if(!UsersToIgnore.Contains(fromUser.Name) && fromUser != User)
     {
+      string[] words = Brain.SplitWords(message, true);
       string reply = null;
       int replyChance = 0;
-      bool talkingAboutMe = false;
+      bool talkingAboutMe = words.Any(word => AreNamesEqual(word, Nickname));
 
-      if(addressedToMe) // if the message was addressed to us (possibly in a channel)...
+      if(addressedToMe && Reply) // if the message was addressed to us (possibly in a channel)...
       {
         replyChance = 100;
         conversation.AddressedMeAt = DateTime.Now;
@@ -455,9 +498,6 @@ sealed class HalBot : IrcClient, IDisposable
           if(conversation.Participants.Count == 1) conversation.AddressedMeAt = DateTime.Now;
         }
 
-        string[] words = Brain.SplitWords(message, true);
-        talkingAboutMe = words.Any(word => AreNamesEqual(word, Nickname));
-
         if(words.Length == 0)
         {
           replyChance = 0;
@@ -481,8 +521,7 @@ sealed class HalBot : IrcClient, IDisposable
 
       if(rand.Next(100) < replyChance)
       {
-        // TODO: it's okay to use the conversation brain if it's not empty...
-        Brain brainToUse = AutoLearn ? conversation.Brain : Brain;
+        Brain brainToUse = UseConversationBrains && !conversation.Brain.IsEmpty ? conversation.Brain : Brain;
         reply = brainToUse.GetResponse(message, 5, true, true, delegate(Brain.Utterance u)
         {
           float value = 0.5f; // TODO: a better evaluation function would be nice
@@ -510,17 +549,17 @@ sealed class HalBot : IrcClient, IDisposable
         }
       }
 
-      if(AutoLearn && !talkingAboutMe)
+      if(AutoLearn)
       {
-        string toLearn = FilterTextForLearning(message);
+        string toLearn = talkingAboutMe ? null : FilterTextForLearning(message);
         if(toLearn != null)
         {
-          Log("LEARN: " + toLearn);
+          if(Verbose) Log("LEARN: " + toLearn);
           Brain.LearnLine(toLearn, true);
         }
         else
         {
-          Log("NOLEARN: " + message);
+          if(Verbose) Log("NOLEARN: " + message);
         }
       }
     }
@@ -562,26 +601,6 @@ sealed class HalBot : IrcClient, IDisposable
   {
     base.OnRawOutput(line);
     if(Verbose && LogRawTraffic) Log(">>> " + line);
-  }
-
-  /// <summary>Gets the directory from where data files should be read.</summary>
-  internal static string DataDirectory
-  {
-    get
-    {
-      if(_dataDirectory == null) _dataDirectory = GetDirectory("data", false);
-      return _dataDirectory;
-    }
-  }
-
-  /// <summary>Gets the directory where log files should be placed.</summary>
-  internal static string LogDirectory
-  {
-    get
-    {
-      if(_logDirectory == null || !Directory.Exists(_logDirectory)) _logDirectory = GetDirectory("logs", true);
-      return _logDirectory;
-    }
   }
 
   const int Version = 1, MaxConversationsPerForum = 1, EndConversationAfterMinutes = 15, RemoveForumAfterDays = 7;
@@ -804,7 +823,7 @@ sealed class HalBot : IrcClient, IDisposable
   Thread timerThread;
   string lastReplyText, _logFile;
   DateTime lastSlowTimerEvents, lastBabbleTime = DateTime.Now; // don't babble immediately
-  int _babbleTime, _interjectChance, _typingDelay;
+  int _babbleTime, _greetChance, _interjectChance, _typingDelay;
 
   /// <summary>Filters a message to normalize it for learning. If null is returned, the message should not be learned from.</summary>
   static string FilterTextForLearning(string message)
@@ -813,6 +832,9 @@ sealed class HalBot : IrcClient, IDisposable
 
     // if the first character (skipping quotation marks) is not a letter or digit, don't learn from it
     if(!char.IsLetterOrDigit(c)) return null;
+
+    // don't learn from inputs containing URLs
+    if(message.Contains("://")) return null;
 
     // analyze the characters in the text
     int lower=0, upper=0, spaces=0, other, letters;
@@ -831,14 +853,23 @@ sealed class HalBot : IrcClient, IDisposable
     if(letters < 20 || upper > lower || spaces*100/message.Length > 30 || other*100/message.Length > 15) return null;
     return message;
   }
-
-  /// <summary>Gets the path to a directory relative to the program directory, optionally creating it.</summary>
-  static string GetDirectory(string directoryName, bool create)
+  
+  /// <summary>Loads the non-empty lines from the file that don't begin with a hash (#) character, which indicates a comment.</summary>
+  static string[] LoadLines(string filename)
   {
-    string exeDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
-    string directory = Path.Combine(exeDirectory, directoryName);
-    if(create && !Directory.Exists(directory)) Directory.CreateDirectory(directory);
-    return directory;
+    List<string> lines = new List<string>();
+    filename = Path.Combine(Program.DataDirectory, filename);
+    if(File.Exists(filename))
+    {
+      using(StreamReader reader = new StreamReader(filename))
+      {
+        reader.ProcessNonEmptyLines(line =>
+        {
+          if(line[0] != '#') lines.Add(line);
+        });
+      }
+    }
+    return lines.ToArray();
   }
 
   /// <summary>Normalizes a received message by looking for a user name in the message that indicates its addressee (according to
@@ -877,9 +908,9 @@ sealed class HalBot : IrcClient, IDisposable
     return new string(chars);
   }
 
+  static readonly string[] greetingFormats;
   static readonly Regex targetRe = new Regex(@"^(?<to>[a-zA-Z\-\[\]\\`^{}][a-zA-Z0-9\-\[\]\\`^{}]*)[:,]\s+(?<message>.*)$",
                                              RegexOptions.CultureInvariant | RegexOptions.Singleline);
-  static string _dataDirectory, _logDirectory;
 }
 
 } // namespace HalBot

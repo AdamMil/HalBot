@@ -266,8 +266,8 @@ abstract class HalBotRssFeed : RssFeed
 
         if(!string.IsNullOrEmpty(value))
         {
-          string logFile = Path.Combine(HalBot.LogDirectory, value + ".log");
-          string idFile  = Path.Combine(HalBot.LogDirectory, value + ".ids");
+          string logFile = Path.Combine(Program.LogDirectory, value + ".log");
+          string idFile  = Path.Combine(Program.LogDirectory, value + ".ids");
           log      = new StreamWriter(logFile, true);
           idLog    = new StreamWriter(idFile, true);
           _logName = value;
@@ -469,7 +469,7 @@ abstract class HalBotRssFeed : RssFeed
 
   static void LoadAbbreviations()
   {
-    string file = Path.Combine(HalBot.DataDirectory, "abbreviations.txt");
+    string file = Path.Combine(Program.DataDirectory, "abbreviations.txt");
     if(File.Exists(file))
     {
       using(StreamReader sr = new StreamReader(file))
@@ -512,13 +512,13 @@ sealed class HalBotXmlRssFeed : HalBotRssFeed
     string logName = feedElement.GetAttributeValue("logName");
     if(!string.IsNullOrEmpty(logName))
     {
-      string logFile = Path.Combine(HalBot.LogDirectory, logName + ".log");
+      string logFile = Path.Combine(Program.LogDirectory, logName + ".log");
       if(File.Exists(logFile))
       {
         using(StreamReader reader = new StreamReader(logFile)) reader.ProcessNonEmptyLines(line => Brain.LearnLine(line, false));
       }
 
-      string idFile = Path.Combine(HalBot.LogDirectory, logName + ".ids");
+      string idFile = Path.Combine(Program.LogDirectory, logName + ".ids");
       if(File.Exists(idFile))
       {
         using(StreamReader reader = new StreamReader(idFile)) reader.ProcessNonEmptyLines(guid => AddGuid(guid));

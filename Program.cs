@@ -28,12 +28,56 @@ using AdamMil.IO;
 using AdamMil.Utilities;
 using IrcLib;
 
+using System.Linq;
+
 namespace HalBot
 {
   class Program
   {
+    /// <summary>Gets the directory from where data files should be read.</summary>
+    internal static string DataDirectory
+    {
+      get
+      {
+        if(_dataDirectory == null) _dataDirectory = GetDirectory("data", false);
+        return _dataDirectory;
+      }
+    }
+
+    /// <summary>Gets the directory where log files should be placed.</summary>
+    internal static string LogDirectory
+    {
+      get
+      {
+        if(_logDirectory == null || !Directory.Exists(_logDirectory)) _logDirectory = GetDirectory("logs", true);
+        return _logDirectory;
+      }
+    }
+
     static void Main()
     {
+      /*using(StreamReader sr = new StreamReader("d:/adammil/code/halbot/bin/debug/eedata/armastusesaal.txt"))
+      {
+        System.Collections.Generic.Dictionary<string,string> corrections = new System.Collections.Generic.Dictionary<string,string>();
+        sr.ProcessNonEmptyLines(line =>
+        {
+          string[] words = line.ToLower().Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+          foreach(string word in words)
+          {
+            if(word.ToCharArray().Any(c => char.IsLetter(c)) && !word.ToCharArray().Any(c => char.IsDigit(c) && c != '2' && c != '6' && c != '8'))
+            {
+              string correction = word.Replace('6', 'õ').Replace('2', 'ä').Replace('y', 'ü').Replace('8', 'ö').Replace("x", "ks").Replace('w', 'v');
+              if(correction != word) corrections[word] = correction;
+            }
+          }
+        });
+        using(StreamWriter sw = new StreamWriter("d:/adammil/code/halbot/bin/debug/eedata/fixes.txt", true))
+        {
+          var orderedKeys = from key in corrections.Keys orderby key select key;
+          foreach(string key in orderedKeys) sw.WriteLine(key + " " + corrections[key]);
+        }
+      }*/
+
       Initialize();
 
       while(true)
@@ -97,6 +141,15 @@ namespace HalBot
       return defaultValue;
     }
 
+    /// <summary>Gets the path to a directory relative to the program directory, optionally creating it.</summary>
+    static string GetDirectory(string directoryName, bool create)
+    {
+      string exeDirectory = Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
+      string directory = Path.Combine(exeDirectory, directoryName);
+      if(create && !Directory.Exists(directory)) Directory.CreateDirectory(directory);
+      return directory;
+    }
+
     static string[] GetMatches(MatchCollection mc)
     {
       string[] values = new string[mc.Count];
@@ -140,7 +193,7 @@ namespace HalBot
       string learnFile = ConfigurationManager.AppSettings["LearnFile"];
       if(!string.IsNullOrEmpty(learnFile))
       {
-        if(!Path.IsPathRooted(learnFile)) learnFile = Path.Combine(HalBot.DataDirectory, learnFile);
+        if(!Path.IsPathRooted(learnFile)) learnFile = Path.Combine(Program.DataDirectory, learnFile);
         if(File.Exists(learnFile))
         {
           try
@@ -161,7 +214,7 @@ namespace HalBot
       string rssFeeds = ConfigurationManager.AppSettings["RssFeeds"];
       if(!string.IsNullOrEmpty(rssFeeds))
       {
-        if(!Path.IsPathRooted(rssFeeds)) rssFeeds = Path.Combine(HalBot.DataDirectory, rssFeeds);
+        if(!Path.IsPathRooted(rssFeeds)) rssFeeds = Path.Combine(Program.DataDirectory, rssFeeds);
         if(File.Exists(rssFeeds))
         {
           try { bot.LoadRssFeeds(rssFeeds); }
@@ -178,15 +231,16 @@ namespace HalBot
       {
         try
         {
-          Console.WriteLine("Starting ident service...");
+          Console.Write("Starting ident service...");
           ident = new IdentServer();
           ident.Listen();
           identThread = new Thread(IdentFunc);
           identThread.Start();
+          Console.WriteLine(" started.");
         }
         catch(Exception ex)
         {
-          Console.Write("WARNING: Unable to start ident service. " + ex.Message);
+          Console.WriteLine("WARNING: Unable to start ident service. " + ex.Message);
         }
       }
 
@@ -205,6 +259,7 @@ namespace HalBot
           {
             Console.WriteLine("Connecting...");
             bot.Connect(server, portNumber);
+            Console.WriteLine("Connected.");
           }
           catch(Exception ex)
           {
@@ -260,8 +315,8 @@ namespace HalBot
       int intValue;
 
       str = str.ToLowerInvariant();
-      if(string.Equals(str, "true", StringComparison.Ordinal)) return true;
-      else if(string.Equals(str, "false", StringComparison.Ordinal)) return false;
+      if(string.Equals(str, "true", StringComparison.Ordinal) || str.Equals("on", StringComparison.Ordinal)) return true;
+      else if(string.Equals(str, "false", StringComparison.Ordinal) || str.Equals("off", StringComparison.Ordinal)) return false;
       else if(int.TryParse(str, out intValue)) return intValue != 0;
       else return bool.Parse(str);
     }
@@ -313,9 +368,9 @@ namespace HalBot
           {
             using(StreamReader reader = new StreamReader(filename))
             {
-              Console.WriteLine("Learning...");
+              Console.Write("Learning...");
               lock(bot) LearnFile(reader);
-              Console.WriteLine("Learned.");
+              Console.WriteLine(" done.");
             }
           }
         }
@@ -332,6 +387,14 @@ namespace HalBot
               case "babble":
                 bot.Babble(Arg(args, 0), true);
                 break;
+              case "babbletime":
+                if(args.Length != 0) bot.BabbleTime = int.Parse(args[0]);
+                Console.WriteLine("Babble time is {0} minutes.", bot.BabbleTime);
+                break;
+              case "convbrains":
+                if(args.Length != 0) bot.UseConversationBrains = ParseBool(args[0]);
+                WriteBoolOption("UseConversationBrains", bot.UseConversationBrains);
+                break;
               case "correctspelling":
                 if(args.Length != 0) correctSpelling = ParseBool(args[0]);
                 WriteBoolOption("Spellcheck", correctSpelling);
@@ -346,6 +409,10 @@ namespace HalBot
               case "forget":
                 bot.Brain.Clear();
                 Console.WriteLine("Brain wiped.");
+                break;
+              case "greetchance":
+                if(args.Length != 0) bot.GreetChance = int.Parse(args[0]);
+                Console.WriteLine("Greet chance is {0}%.", bot.GreetChance);
                 break;
               case "ignore":
                 if(args.Length != 0)
@@ -408,6 +475,10 @@ namespace HalBot
                 if(args.Length != 0) bot.SendRawCommand(Join(args));
                 break;
               case "reply":
+                if(args.Length != 0) bot.Reply = ParseBool(args[0]);
+                WriteBoolOption("Reply", bot.Reply);
+                break;
+              case "respond":
                 Console.WriteLine(bot.Brain.GetResponse(Join(args), true, false) ?? "I have nothing to say to that.");
                 break;
               case "say":
@@ -441,9 +512,9 @@ namespace HalBot
                 else Console.WriteLine("Ignoring {0}.", StringUtility.Join(", ", bot.UsersToIgnore));
                 break;
               case "updaterss":
-                Console.WriteLine("Updating RSS feeds...");
+                Console.Write("Updating RSS feeds...");
                 bot.UpdateRssFeeds();
-                Console.WriteLine("RSS feeds updated.");
+                Console.WriteLine(" done.");
                 break;
               case "verbose":
                 if(args.Length != 0) bot.Verbose = ParseBool(args[0]);
@@ -481,5 +552,6 @@ namespace HalBot
 
     static readonly Regex cmdRe = new Regex(@"^\s*(?<cmd>\w+)(?:\s+(?<args>.*?))?\s*$", RegexOptions.Singleline);
     static readonly Regex paramRe = new Regex(@"\S+", RegexOptions.Singleline);
+    static string _dataDirectory, _logDirectory;
   }
 }

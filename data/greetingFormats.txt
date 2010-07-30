@@ -1,0 +1,7 @@
+﻿# this file contains format strings used to greet people. {0} is replaced with the user's nickname
+hi {0}!
+hello, {0}.
+greetings, {0}.
+hey {0}. how are you?
+hey {0}. what's going on?
+hey, what's happening, {0}?
