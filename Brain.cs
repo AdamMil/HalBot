@@ -603,7 +603,7 @@ sealed class Brain
     if(IsBadKeyword(word)) return null;
 
     string complement;
-    if(swaps.TryGetValue(word, out complement) && rand.NextBoolean()) word = complement;
+    if(swaps.TryGetValue(word, out complement) && (rand.Next() & 1) == 0) word = complement;
 
     return word;
   }
