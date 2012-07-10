@@ -437,7 +437,7 @@ namespace HalBot
                   {
                     if(r.Error != IrcResponseCodes.None)
                     {
-                      Console.WriteLine("Can't join {0}: {1}", r.Channel.Name, r.Error.ToString());
+                      Console.WriteLine("ERROR: Can't join {0}: {1}", r.Channel.Name, r.Error.ToString());
                     }
                   });
                 }

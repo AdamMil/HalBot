@@ -707,7 +707,7 @@ sealed class HtmlNode
 #endregion
 
 #region HtmlNodeType
-public enum HtmlNodeType
+enum HtmlNodeType
 {
   Text, Element, Comment, Document
 }

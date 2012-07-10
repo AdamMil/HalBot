@@ -255,7 +255,7 @@ sealed class HalBot : IrcClient, IDisposable
 
         if(message == null) // if there was no feed, or there was nothing to say about it...
         {
-          if(rand.NextBoolean()) // there's a 50% chance of talking about something from a random RSS feed
+          if(RssFeeds.Count != 0 && (rand.Next() & 1) == 0) // there's a 50% chance of talking about something from a random RSS feed
           {
             feed = RssFeeds.SelectRandom(rand);
             lock(feed.Brain) message = feed.Brain.GetRandomUtterance();
@@ -427,7 +427,7 @@ sealed class HalBot : IrcClient, IDisposable
     Log("KICK: {0} by {1} from {2}: {3}", kicked, kicker, channelName, kickText);
 
     // if the bot was kicked and it should try to rejoin, do so 20 seconds later
-    if(AreNamesEqual(kicked, Nickname) && RejoinOnKick) AddDelayedAction(20000, delegate { Join(channelName); });
+    if(RejoinOnKick && AreNamesEqual(kicked, Nickname)) AddDelayedAction(20000, delegate { Join(channelName); });
   }
 
   protected override void OnMessageReceived(string from, string to, string text)

@@ -1,6 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HalBot", "HalBot.csproj", "{6BE314E8-C0DE-48B1-879A-94135D036A44}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdamMil.Collections", "..\AdamMil.net\Collections\AdamMil.Collections.csproj", "{D9724C65-C54A-4671-BA0B-40B0B38464DD}"
