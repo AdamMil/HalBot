@@ -209,7 +209,7 @@ abstract class RssFeed : IDisposable
     try
     {
       responseStream = response.GetResponseStream();
-      return GetEncoding(response).GetString(responseStream.ReadAllBytes());
+      return GetEncoding(response).GetString(responseStream.ReadToEnd());
     }
     finally
     {
